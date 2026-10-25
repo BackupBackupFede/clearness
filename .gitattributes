@@ -1,0 +1,8 @@
+# The CI runs on ubuntu: gradlew must keep LF endings or bash fails with
+# "bad interpreter: /bin/sh^M". Its .bat counterpart wants CRLF.
+* text=auto eol=lf
+gradlew    text eol=lf
+gradlew.bat text eol=crlf
+
+*.jar binary
+*.png binary

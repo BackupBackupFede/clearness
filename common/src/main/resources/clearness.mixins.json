@@ -1,0 +1,18 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "net.emeraude.clearness.mixin",
+  "compatibilityLevel": "${mixin_compat}",
+  "mixins": [
+    "CommandsMixin",
+    "DedicatedServerMixin",
+    "MinecraftServerMixin",
+    "PlayerListMixin",
+    "ServerPlayerGameModeMixin",
+    "ServerPlayerMixin"
+  ],
+  "client": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

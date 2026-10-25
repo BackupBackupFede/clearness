@@ -1,0 +1,69 @@
+plugins {
+    id 'java'
+    id 'idea'
+    // Both IDs come from the same Loom artifact; exactly one is applied below.
+    id 'fabric-loom' apply false
+    id 'net.fabricmc.fabric-loom' apply false
+}
+
+// ---------------------------------------------------------------------------
+// THE cross-era gotcha. Loom ships two plugin IDs:
+//
+//   net.fabricmc.fabric-loom -> LoomNoRemapGradlePlugin. Its constructor does
+//        disableObfuscation.set(true); disableObfuscation.finalizeValue();
+//        i.e. it declares "de-obfuscated era" AND locks the flag, so any later
+//        officialMojangMappings() throws
+//        "Cannot use Mojang mappings in a non-obfuscated environment"
+//        and even -Pfabric.loom.disableObfuscation=false cannot undo it.
+//
+//   fabric-loom              -> LoomGradlePlugin. The classic remapping path,
+//        the one obfuscated Minecraft (1.21.x) needs.
+//
+// The error names the mappings call, never the plugin ID, so this is worth
+// keeping written down. Same Loom version handles both.
+// ---------------------------------------------------------------------------
+apply plugin: rootProject.mcObfuscated ? 'fabric-loom' : 'net.fabricmc.fabric-loom'
+
+base {
+    archivesName = "${rootProject.mod_id}-fabric-${rootProject.mcVersion}"
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${rootProject.mcVersion}"
+
+    if (rootProject.mcObfuscated) {
+        // Obfuscated Minecraft (1.21.x): Loom needs a mappings layer. Mojang mappings keep the
+        // common mixin (written in Mojmap) applicable without an intermediate refmap.
+        mappings loom.officialMojangMappings()
+        modImplementation "net.fabricmc:fabric-loader:${rootProject.loaderVersion}"
+        if (rootProject.useFabricApi) modImplementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabricApiVersion}"
+    } else {
+        // MC 26.x ships de-obfuscated (real names) -> no mappings layer, and no `mod` prefix
+        // because there is nothing to remap.
+        implementation "net.fabricmc:fabric-loader:${rootProject.loaderVersion}"
+        // No modImplementation under the no-remap plugin: it does not exist there (invariant 2).
+        if (rootProject.useFabricApi) implementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabricApiVersion}"
+    }
+
+    compileOnly project(':common')
+    annotationProcessor "io.github.llamalad7:mixinextras-common:${rootProject.mixinextras_version}"
+}
+
+loom {
+    mixin {
+        useLegacyMixinAp = false
+    }
+    runs {
+        client { client(); runDir 'run' }
+        server { server(); runDir 'run' }
+    }
+}
+
+// Pull the common module's sources and resources straight into this loader jar.
+tasks.named('compileJava', JavaCompile) {
+    source(project(':common').sourceSets.main.allSource)
+}
+
+tasks.named('processResources', ProcessResources) {
+    from project(':common').sourceSets.main.resources
+}

@@ -1,0 +1,89 @@
+// ---------------------------------------------------------------------------
+// Version MATRIX — the ONE place per-Minecraft-version values live.
+// Build a line with:  ./gradlew build -Pminecraft_version=1.21.1
+// (the default target is minecraft_version in gradle.properties)
+//
+// Adding a version = one row here. Also add it to the `minecraft:` list in
+// .github/workflows/build.yml and release.yml, or CI will silently skip it.
+// ---------------------------------------------------------------------------
+def MC = rootProject.minecraft_version
+// packFormat is READ from each version's own version.json (pack_version.resource_major in the
+// client jar), never guessed: 1.21.1 = 34, 26.2 = 88, 26.3 = 97 - the steps are not regular.
+// Version ranges are bounded on BOTH sides so each jar serves its own line only.
+def MATRIX = [
+    "26.3"  : [neoform: "26.3-1",                 neo: "26.3.0.10-beta", loader: "0.19.5",  java: 25, obfuscated: false,
+               fabricMcDep: ">=26.3 <26.4",       neoMcDep: "[26.3,26.4)",   neoDep: "[26.3,)",       packFormat: 97,
+               fabricApi: "0.161.0+26.3"],
+    "26.2"  : [neoform: "26.2-2",                 neo: "26.2.0.35-beta", loader: "0.19.3",  java: 25, obfuscated: false,
+               fabricMcDep: ">=26.2 <26.3",       neoMcDep: "[26.2,26.3)",   neoDep: "[26.2,)",       packFormat: 88,
+               fabricApi: "0.158.0+26.2"],
+    "1.21.1": [neoform: "1.21.1-20240808.144430", neo: "21.1.243",       loader: "0.16.10", java: 21, obfuscated: true,
+               fabricMcDep: ">=1.21.1 <1.22",     neoMcDep: "[1.21.1,1.22)", neoDep: "[21.1.0,)",     packFormat: 34,
+               fabricApi: "0.116.17+1.21.1"],
+]
+def V = MATRIX[MC]
+if (V == null) throw new GradleException("Unknown minecraft_version '${MC}' — add it to MATRIX in build.gradle.")
+
+rootProject.ext {
+    mcVersion      = MC
+    neoformVersion = V.neoform
+    neoVersion     = V.neo
+    loaderVersion  = V.loader
+    mcObfuscated   = V.obfuscated
+    javaVersion    = V.java
+    fabricMcDep    = V.fabricMcDep
+    neoMcDep       = V.neoMcDep
+    neoDep         = V.neoDep
+    // Resource-pack format of this Minecraft version, read out of its own version.json. 26.2 grew a
+    // richer schema (min_format / max_format), but a plain integer pack_format is still accepted
+    // there, so one pack.mcmeta shape serves every line.
+    packFormat     = V.packFormat
+    // Fabric Loader alone does not expose a mod's assets/ as a resource pack — that is Fabric API's
+    // fabric-resource-loader-v0. Without it a Fabric client mounts "vanilla" only, and every
+    // texture and lang file in this mod is silently ignored. NeoForge needs no equivalent.
+    fabricApiVersion = V.fabricApi
+    useFabricApi   = rootProject.use_fabric_api.toBoolean()
+}
+
+subprojects {
+    apply plugin: 'java'
+
+    version = rootProject.mod_version
+    group = rootProject.mod_group
+
+    java.toolchain.languageVersion = JavaLanguageVersion.of(rootProject.javaVersion)
+
+    repositories {
+        mavenCentral()
+        maven { name = 'Sponge / Mixin'; url = 'https://repo.spongepowered.org/repository/maven-public/' }
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+        options.release = rootProject.javaVersion
+    }
+
+    // Expand mod metadata placeholders (${mod_id}, ${mixin_compat}, version ranges) at build time.
+    tasks.withType(ProcessResources).configureEach {
+        // Only string-valued gradle.properties entries — never the whole property map, which
+        // holds non-serializable Project objects (allprojects, parent, ...) and breaks Gradle 9.
+        def props = rootProject.properties.findAll { it.value instanceof String }
+        props['mixin_compat']  = "JAVA_${rootProject.javaVersion}".toString()
+        props['mc_version']    = rootProject.mcVersion.toString()
+        props['fabric_mc_dep'] = rootProject.fabricMcDep.toString()
+        props['neo_mc_dep']    = rootProject.neoMcDep.toString()
+        props['neo_dep']       = rootProject.neoDep.toString()
+        props['pack_format']   = rootProject.packFormat.toString()
+        // fabric.mod.json cannot carry an "if": the whole dependency line is expanded, or nothing.
+        props['fabric_api_dep'] = rootProject.useFabricApi ? ',\n    "fabric-resource-loader-v0": "*"' : ''
+        inputs.properties(props)
+        filesMatching(['pack.mcmeta', 'fabric.mod.json', 'META-INF/neoforge.mods.toml', '*.mixins.json']) {
+            expand(props)
+        }
+    }
+
+    // Mapped dependencies aren't consumable downstream; don't publish module metadata.
+    tasks.withType(GenerateModuleMetadata).configureEach {
+        enabled = false
+    }
+}

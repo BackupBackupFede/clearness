@@ -1,0 +1,35 @@
+modLoader = "javafml"
+loaderVersion = "[1,)"
+license = "${mod_license}"
+issueTrackerURL = "https://github.com/BackupBackupFede/${mod_repo}/issues"
+
+[[mods]]
+modId = "${mod_id}"
+version = "${mod_version}"
+displayName = "${mod_name}"
+logoFile = "icon.png"
+authors = "${mod_author}"
+credits = "Support: https://ko-fi.com/acesoverdeuces777"
+displayURL = "https://github.com/BackupBackupFede/${mod_repo}"
+description = '''
+Something now waits far from spawn. Your compass knows where. Open it, and the world turns to glass around everything that was ever built. Server-side only.
+
+Support: https://ko-fi.com/acesoverdeuces777
+'''
+
+[[mixins]]
+config = "${mod_id}.mixins.json"
+
+[[dependencies.${mod_id}]]
+modId = "neoforge"
+type = "required"
+versionRange = "${neo_dep}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "minecraft"
+type = "required"
+versionRange = "${neo_mc_dep}"
+ordering = "NONE"
+side = "BOTH"

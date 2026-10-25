@@ -1,0 +1,37 @@
+// ---------------------------------------------------------------------------
+// Plugin versions are resolved during SETTINGS evaluation — before any project,
+// and therefore before MATRIX in build.gradle exists. So they are read straight
+// out of gradle.properties here rather than declared in each plugins {} block:
+// one place to bump Loom / ModDevGradle for the whole repo.
+// ---------------------------------------------------------------------------
+pluginManagement {
+    def props = new Properties()
+    new File(settings.rootDir, 'gradle.properties').withInputStream { props.load(it) }
+
+    repositories {
+        gradlePluginPortal()
+        maven { name = 'NeoForge'; url = 'https://maven.neoforged.net/releases' }
+        maven { name = 'Fabric';   url = 'https://maven.fabricmc.net/' }
+        maven { name = 'Sponge';   url = 'https://repo.spongepowered.org/repository/maven-public/' }
+    }
+
+    resolutionStrategy {
+        eachPlugin {
+            switch (requested.id.id) {
+                // Both Loom IDs ship in the same artifact and share one version.
+                case 'fabric-loom':
+                case 'net.fabricmc.fabric-loom': useVersion(props['loom_version']);   break
+                case 'net.neoforged.moddev':     useVersion(props['moddev_version']); break
+            }
+        }
+    }
+}
+
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+rootProject.name = 'clearness-3'
+include("common")
+include("fabric")
+include("neoforge")

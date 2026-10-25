@@ -1,0 +1,68 @@
+name: Build
+
+# Builds EVERY line of the version matrix.
+# The version list is READ FROM build.gradle — there is no second list to keep
+# in sync. Adding a row to MATRIX is all it takes to get it built here.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  versions:
+    runs-on: ubuntu-latest
+    outputs:
+      list: ${{ steps.read.outputs.list }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: read
+        name: Read MATRIX keys from build.gradle
+        run: |
+          list=$(grep -oP '^\s*"\K[0-9][^"]*(?="\s*:\s*\[)' build.gradle | sed 's/.*/"&"/' | paste -sd, -)
+          if [ -z "$list" ]; then
+            echo "::error file=build.gradle::No versions found in MATRIX — check its formatting."
+            exit 1
+          fi
+          echo "list=[$list]" >> "$GITHUB_OUTPUT"
+          echo "Will build: [$list]"
+
+  build:
+    needs: versions
+    strategy:
+      fail-fast: false          # a break on one MC version must not hide the others
+      matrix:
+        minecraft: ${{ fromJSON(needs.versions.outputs.list) }}
+    runs-on: ubuntu-latest
+    name: build ${{ matrix.minecraft }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # Two JDKs on purpose:
+      #  - the Gradle PROCESS needs 25 (Gradle 9.5 + Fabric Loom).
+      #  - the 1.21.1 toolchain needs 21; Gradle picks it out of the tool cache,
+      #    and the foojay resolver downloads it if it cannot.
+      # setup-java points JAVA_HOME at the LAST entry, so 25 must come last.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: |
+            21
+            25
+
+      - run: chmod +x ./gradlew
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Build ${{ matrix.minecraft }}
+        run: ./gradlew build -Pminecraft_version=${{ matrix.minecraft }} --stacktrace
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: jars-${{ matrix.minecraft }}
+          path: |
+            fabric/build/libs/*.jar
+            neoforge/build/libs/*.jar
+          if-no-files-found: error

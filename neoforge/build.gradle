@@ -1,0 +1,39 @@
+plugins {
+    id 'java'
+    id 'idea'
+    id 'net.neoforged.moddev'
+}
+
+base {
+    archivesName = "${rootProject.mod_id}-neoforge-${rootProject.mcVersion}"
+}
+
+neoForge {
+    version = rootProject.neoVersion
+
+    runs {
+        client { client() }
+        server { server() }
+    }
+
+    mods {
+        "${rootProject.mod_id}" {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+dependencies {
+    compileOnly project(':common')
+    compileOnly "io.github.llamalad7:mixinextras-common:${rootProject.mixinextras_version}"
+    annotationProcessor "io.github.llamalad7:mixinextras-common:${rootProject.mixinextras_version}"
+}
+
+// Pull the common module's sources and resources straight into this loader jar.
+tasks.named('compileJava', JavaCompile) {
+    source(project(':common').sourceSets.main.allSource)
+}
+
+tasks.named('processResources', ProcessResources) {
+    from project(':common').sourceSets.main.resources
+}

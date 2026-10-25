@@ -1,0 +1,58 @@
+plugins {
+    id 'java'
+    id 'idea'
+    id 'net.neoforged.moddev'
+}
+
+base {
+    archivesName = "${rootProject.mod_id}-common"
+}
+
+neoForge {
+    // Compile common code against un-modified (Mojang-mapped) Minecraft.
+    neoFormVersion = rootProject.neoformVersion
+}
+
+// One source folder per Minecraft line, for the rare class that cannot be written once: when a
+// vanilla method changes SHAPE (a parameter added), a mixin handler has to change with it, because
+// a handler's parameters must mirror the target's exactly. Only one folder is compiled.
+sourceSets.main.java.srcDir rootProject.mcObfuscated ? 'src/main/java-legacy' : 'src/main/java-modern'
+
+dependencies {
+    // Both loaders bundle Mixin + MixinExtras, so common may use them (provided, not shipped).
+    compileOnly "net.fabricmc:sponge-mixin:${rootProject.mixin_version}"
+    compileOnly "io.github.llamalad7:mixinextras-common:${rootProject.mixinextras_version}"
+    annotationProcessor "io.github.llamalad7:mixinextras-common:${rootProject.mixinextras_version}"
+}
+
+// JUnit for plain-Java logic. Anything that can live without Minecraft (money, rules, parsing,
+// persistence) is cheaper to prove here than in a running server: milliseconds per run, and edge
+// cases a self-test would never reach. Put it under .../core/ and keep Minecraft out of it.
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    // Minecraft's own libraries are not on the test classpath: declare what core/ uses.
+    testImplementation 'com.google.code.gson:gson:2.10.1'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+// core/ must stay free of Minecraft, or its tests stop compiling and it stops being reusable
+// (a Paper adapter, say). Checked on every build, only when the folder exists.
+tasks.register('checkCoreIsPure') {
+    def root = file('src/main/java')
+    doLast {
+        root.eachDirRecurse { dir ->
+            if (dir.name != 'core') return
+            dir.eachFileRecurse { f ->
+                if (f.name.endsWith('.java') && f.text =~ /import\s+(static\s+)?(net\.minecraft|com\.mojang)/) {
+                    throw new GradleException("${f.name} imports Minecraft - core/ must not")
+                }
+            }
+        }
+    }
+}
+tasks.named('check') { dependsOn 'checkCoreIsPure' }
